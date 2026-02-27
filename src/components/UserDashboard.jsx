@@ -6,31 +6,37 @@ import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp 
 const UserDashboard = ({ user, onLogout }) => {
   const [requests, setRequests] = useState([]);
   const [formData, setFormData] = useState({ toolName: '', purpose: '', fromDateTime: '', toDateTime: '' });
+  
+  // State to track current system time for expiration logic
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // 1. DATA LOGIC: Fetch user's requests in real-time
-useEffect(() => {
-  // Simplified query without 'orderBy' to test if data appears
-  const q = query(
-    collection(db, "requests"), 
-    where("userEmail", "==", user.email)
-  );
+  useEffect(() => {
+    const q = query(
+      collection(db, "requests"), 
+      where("userEmail", "==", user.email)
+    );
 
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const docs = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    
-    // Sort manually in JavaScript if the Firebase index isn't ready yet
-    const sortedDocs = docs.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
-    
-    setRequests(sortedDocs);
-  }, (error) => {
-    console.error("Listener failed:", error); // This will tell you why it's not reflecting
-  });
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      const sortedDocs = docs.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+      setRequests(sortedDocs);
+    }, (error) => {
+      console.error("Listener failed:", error);
+    });
 
-  return () => unsubscribe();
-}, [user.email]);
+    // Update current time every minute to refresh expiration status
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, [user.email]);
 
   // Calculate status counts for the top cards
   const stats = {
@@ -53,7 +59,7 @@ useEffect(() => {
         userEmail: user.email,
         ...formData,
         status: 'pending',
-        createdAt: serverTimestamp() // Uses Firebase server time
+        createdAt: serverTimestamp() 
       });
       setFormData({ toolName: '', purpose: '', fromDateTime: '', toDateTime: '' });
       alert("Request Submitted Successfully!");
@@ -103,7 +109,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* SUBMISSION FORM: Matching image_1439c3.png */}
+      {/* SUBMISSION FORM */}
       <div className="max-w-7xl mx-auto bg-white rounded-3xl border border-slate-100 shadow-sm p-8 mb-12">
         <div className="flex items-center gap-4 mb-8">
           <div className="bg-blue-50 p-3 rounded-xl"><Sparkles className="text-blue-500" /></div>
@@ -133,7 +139,7 @@ useEffect(() => {
         </form>
       </div>
 
-      {/* SUBMISSIONS TABLE: Matching image_08cdd2.png */}
+      {/* SUBMISSIONS TABLE */}
       <div className="max-w-7xl mx-auto">
         <h3 className="text-xl font-bold mb-1">Your Submissions</h3>
         <p className="text-slate-500 text-sm mb-6">Track your AI usage request status</p>
@@ -143,24 +149,37 @@ useEffect(() => {
               <tr><th className="p-4">User</th><th className="p-4">AI Tool</th><th className="p-4">Purpose</th><th className="p-4">Time Range</th><th className="p-4 text-center">Status</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {requests.map((req) => (
-                <tr key={req.id} className="hover:bg-slate-50 transition">
-                  <td className="p-4 font-bold text-sm">{req.userName}<br/><span className="font-normal text-xs text-slate-400">{req.userEmail}</span></td>
-                  <td className="p-4 text-sm">{req.toolName}</td>
-                  <td className="p-4 text-sm text-slate-500 italic">{req.purpose}</td>
-                  <td className="p-4 text-xs text-slate-600 font-mono">{req.fromDateTime}<br/>to {req.toDateTime}</td>
-                  <td className="p-4">
-                    <span className={`mx-auto flex items-center justify-center gap-1 w-fit px-3 py-1 rounded-full text-xs font-bold ${
-                      req.status === 'pending' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                      req.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                      'bg-red-50 text-red-600 border border-red-100'
-                    }`}>
-                      {req.status === 'pending' && <Clock size={12} />}
-                      {req.status.toUpperCase()}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {requests.map((req) => {
+                // Determine if the request duration has expired
+                const isExpired = req.toDateTime ? new Date(req.toDateTime) < currentTime : false;
+
+                return (
+                  <tr key={req.id} className="hover:bg-slate-50 transition">
+                    <td className="p-4 font-bold text-sm">{req.userName}<br/><span className="font-normal text-xs text-slate-400">{req.userEmail}</span></td>
+                    <td className="p-4 text-sm">{req.toolName}</td>
+                    <td className="p-4 text-sm text-slate-500 italic">{req.purpose}</td>
+                    <td className="p-4 text-xs text-slate-600 font-mono">{req.fromDateTime?.replace('T', ' ')}<br/>to {req.toDateTime?.replace('T', ' ')}</td>
+                    <td className="p-4">
+                      <div className="flex flex-col items-center gap-1">
+                        {isExpired ? (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                            EXPIRED
+                          </span>
+                        ) : (
+                          <span className={`flex items-center gap-1 w-fit px-3 py-1 rounded-full text-xs font-bold ${
+                            req.status === 'pending' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                            req.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                            'bg-red-50 text-red-600 border border-red-100'
+                          }`}>
+                            {req.status === 'pending' && <Clock size={12} />}
+                            {req.status.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {requests.length === 0 && <div className="p-10 text-center text-slate-400">No submissions found.</div>}
