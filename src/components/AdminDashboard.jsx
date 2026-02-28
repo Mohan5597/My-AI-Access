@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Shield, CheckCircle, XCircle, Trash2, Users, FileText, LayoutGrid, Lock, Clock } from 'lucide-react';
+import { LogOut, Shield, CheckCircle, XCircle, Trash2, Users, FileText, LayoutGrid, Lock, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import emailjs from '@emailjs/browser';
@@ -11,6 +11,11 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [usersList, setUsersList] = useState([]);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'user' });
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // --- PAGINATION STATE ---
+  const [reqPage, setReqPage] = useState(1);
+  const [userPage, setUserPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     const qReq = query(collection(db, "requests"), orderBy("createdAt", "desc"));
@@ -27,6 +32,15 @@ const AdminDashboard = ({ user, onLogout }) => {
       clearInterval(timer);
     };
   }, []);
+
+  // --- PAGINATION LOGIC ---
+  const reqStartIndex = (reqPage - 1) * itemsPerPage;
+  const currentRequests = requests.slice(reqStartIndex, reqStartIndex + itemsPerPage);
+  const totalReqPages = Math.ceil(requests.length / itemsPerPage);
+
+  const userStartIndex = (userPage - 1) * itemsPerPage;
+  const currentUsers = usersList.slice(userStartIndex, userStartIndex + itemsPerPage);
+  const totalUserPages = Math.ceil(usersList.length / itemsPerPage);
 
   // --- ANALYTICS & STATS LOGIC ---
   const userCounts = {
@@ -213,43 +227,60 @@ const AdminDashboard = ({ user, onLogout }) => {
       </div>
 
       {activeTab === 'requests' ? (
-        <div className="max-w-7xl mx-auto bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-          {requests.length > 0 ? (
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase p-4 tracking-widest">
-                <tr><th className="p-4">User</th><th className="p-4">AI Tool</th><th className="p-4">Time Range</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {requests.map(req => {
-                  const isExpired = req.toDateTime ? new Date(req.toDateTime) < currentTime : false;
-                  return (
-                    <tr key={req.id} className="hover:bg-slate-50 transition">
-                      <td className="p-4 font-bold text-sm text-slate-800 capitalize">{req.userName}<br/><span className="text-[10px] font-normal text-slate-400">{req.userEmail}</span></td>
-                      <td className="p-4 text-sm font-semibold text-slate-600 capitalize">{req.toolName}</td>
-                      <td className="p-4 text-[10px] text-slate-500 font-mono leading-relaxed">{req.fromDateTime?.replace('T', ' ')}<br/><span className="text-slate-300">to</span><br/>{req.toDateTime?.replace('T', ' ')}</td>
-                      <td className="p-4">
-                        {isExpired ? <span className="px-3 py-1 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase">EXPIRED</span> : 
-                        <span className={`flex items-center gap-1 w-fit px-3 py-1 rounded-full text-[10px] font-bold border ${req.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : req.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                          {req.status === 'pending' && <Clock size={10} />} {req.status.toUpperCase()}
-                        </span>}
-                      </td>
-                      <td className="p-4 text-right flex justify-end gap-2">
-                        {!isExpired && req.status === 'pending' && (
-                          <><button onClick={() => handleUpdateStatus(req.id, 'approved')} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition shadow-sm"><CheckCircle size={14}/></button>
-                          <button onClick={() => handleUpdateStatus(req.id, 'rejected')} className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"><XCircle size={14}/></button></>
-                        )}
-                        <button onClick={() => handleDelete('requests', req.id)} className="p-2 text-slate-300 hover:text-red-500 transition"><Trash2 size={14}/></button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : ( <div className="p-20 text-center text-slate-400 font-medium">No requests found.</div> )}
+        <div className="max-w-7xl mx-auto">
+          {/* PAGINATION CONTROLS - REQUESTS */}
+          <div className="flex justify-end mb-4 gap-2 items-center">
+            <button 
+              disabled={reqPage === 1} 
+              onClick={() => setReqPage(p => p - 1)}
+              className="p-1 rounded-lg border bg-white disabled:opacity-30 hover:bg-slate-50 transition"
+            ><ChevronLeft size={18}/></button>
+            <span className="text-xs font-bold text-slate-500">Page {reqPage} of {totalReqPages || 1}</span>
+            <button 
+              disabled={reqPage >= totalReqPages} 
+              onClick={() => setReqPage(p => p + 1)}
+              className="p-1 rounded-lg border bg-white disabled:opacity-30 hover:bg-slate-50 transition"
+            ><ChevronRight size={18}/></button>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            {requests.length > 0 ? (
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase p-4 tracking-widest">
+                  <tr><th className="p-4">User</th><th className="p-4">AI Tool</th><th className="p-4">Time Range</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {currentRequests.map(req => {
+                    const isExpired = req.toDateTime ? new Date(req.toDateTime) < currentTime : false;
+                    return (
+                      <tr key={req.id} className="hover:bg-slate-50 transition">
+                        <td className="p-4 font-bold text-sm text-slate-800 capitalize">{req.userName}<br/><span className="text-[10px] font-normal text-slate-400">{req.userEmail}</span></td>
+                        <td className="p-4 text-sm font-semibold text-slate-600 capitalize">{req.toolName}</td>
+                        <td className="p-4 text-[10px] text-slate-500 font-mono leading-relaxed">{req.fromDateTime?.replace('T', ' ')}<br/><span className="text-slate-300">to</span><br/>{req.toDateTime?.replace('T', ' ')}</td>
+                        <td className="p-4">
+                          {isExpired ? <span className="px-3 py-1 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase">EXPIRED</span> : 
+                          <span className={`flex items-center gap-1 w-fit px-3 py-1 rounded-full text-[10px] font-bold border ${req.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : req.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                            {req.status === 'pending' && <Clock size={10} />} {req.status.toUpperCase()}
+                          </span>}
+                        </td>
+                        <td className="p-4 text-right flex justify-end gap-2">
+                          {!isExpired && req.status === 'pending' && (
+                            <><button onClick={() => handleUpdateStatus(req.id, 'approved')} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition shadow-sm"><CheckCircle size={14}/></button>
+                            <button onClick={() => handleUpdateStatus(req.id, 'rejected')} className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"><XCircle size={14}/></button></>
+                          )}
+                          <button onClick={() => handleDelete('requests', req.id)} className="p-2 text-slate-300 hover:text-red-500 transition"><Trash2 size={14}/></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : ( <div className="p-20 text-center text-slate-400 font-medium">No requests found.</div> )}
+          </div>
         </div>
       ) : (
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm h-fit">
             <h3 className="font-bold text-lg mb-6 flex items-center gap-2"><Users className="text-blue-500"/> Add Member</h3>
             <form onSubmit={handleAddUser} className="space-y-4">
               <input placeholder="Name" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-100 outline-none" onChange={e => setNewUser({...newUser, name: e.target.value})} value={newUser.name} />
@@ -262,6 +293,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               <button type="submit" className="w-full bg-slate-900 text-white p-4 rounded-xl font-bold hover:bg-black transition">Register Member</button>
             </form>
           </div>
+
           <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-2">
               <h3 className="font-bold text-lg">Registry</h3>
@@ -271,8 +303,24 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded-lg border border-emerald-100">{userCounts.students} USERS</span>
               </div>
             </div>
+
+            {/* PAGINATION CONTROLS - USERS */}
+            <div className="flex justify-end mb-4 gap-2 items-center">
+              <button 
+                disabled={userPage === 1} 
+                onClick={() => setUserPage(p => p - 1)}
+                className="p-1 rounded-lg border bg-white disabled:opacity-30 hover:bg-slate-50 transition"
+              ><ChevronLeft size={16}/></button>
+              <span className="text-[10px] font-bold text-slate-400">Page {userPage} of {totalUserPages || 1}</span>
+              <button 
+                disabled={userPage >= totalUserPages} 
+                onClick={() => setUserPage(p => p + 1)}
+                className="p-1 rounded-lg border bg-white disabled:opacity-30 hover:bg-slate-50 transition"
+              ><ChevronRight size={16}/></button>
+            </div>
+
             <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-              {usersList.map(u => (
+              {currentUsers.map(u => (
                 <div key={u.id} className="flex justify-between items-center p-4 border-b border-slate-50 last:border-0 hover:bg-slate-50 rounded-2xl transition">
                   <div className="flex gap-3"><div className="bg-blue-50 p-2 rounded-full"><Users className="text-blue-400" size={18}/></div><div><p className="font-bold text-sm text-slate-800">{u.name}</p><p className="text-[10px] text-slate-400">{u.email}</p></div></div>
                   <div className="flex items-center gap-4"><span className="text-[9px] bg-blue-50 text-blue-600 font-bold px-2 py-1 rounded-lg border border-blue-100 uppercase">{u.role}</span>
