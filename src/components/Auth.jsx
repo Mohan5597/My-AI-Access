@@ -1,25 +1,40 @@
 import React, { useState } from 'react';
-import { Shield, Lock, User, ArrowRight } from 'lucide-react';
+import { Shield, Lock, ArrowRight, Check, X, Info } from 'lucide-react';
+// 1. Import toast from the library
+import toast from 'react-hot-toast';
 
 const Auth = ({ onAuth }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState(''); // New password state
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('user');
+  const [showRules, setShowRules] = useState(false);
+
+  const validations = {
+    minLength: password.length >= 8,
+    hasNumber: /\d/.test(password),
+    hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+  };
+
+  const isPasswordSecure = Object.values(validations).every(Boolean);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Updated validation to include password
+    // 2. Use toast.error for validation feedback
     if (!email || !password || (isRegister && !name)) {
-      alert("Please fill in all fields");
+      toast.error("Please fill in all fields");
       return;
     }
 
-    const mode = isRegister ? 'register' : 'login';
-    // Passing password along with user details
-    onAuth(mode, { email, name, password }, role);
+    if (isRegister && !isPasswordSecure) {
+      toast.error("Password must meet all security requirements.");
+      return;
+    }
+
+    // Pass the data to handleAuth (App.js will handle success/failure toasts)
+    onAuth(isRegister ? 'register' : 'login', { email, name, password }, role);
   };
 
   return (
@@ -52,7 +67,6 @@ const Auth = ({ onAuth }) => {
             />
           </div>
 
-          {/* New Password Field */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
             <div className="relative">
@@ -61,7 +75,34 @@ const Auth = ({ onAuth }) => {
                 className="w-full p-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-400 pl-10"
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <Lock className="absolute left-3 top-3.5 text-slate-400" size={18} />
+              
+              <div 
+                className="absolute left-3 top-3.5 text-slate-400 cursor-help group"
+                onMouseEnter={() => setShowRules(true)}
+                onMouseLeave={() => setShowRules(false)}
+              >
+                <Lock size={18} className="group-hover:text-blue-500 transition-colors" />
+                
+                {isRegister && showRules && (
+                  <div className="absolute left-0 bottom-full mb-2 w-64 bg-slate-800 text-white p-4 rounded-2xl shadow-xl z-50 animate-in fade-in slide-in-from-bottom-2">
+                    <p className="text-xs font-bold mb-3 flex items-center gap-2 border-b border-slate-700 pb-2">
+                      <Info size={14} className="text-blue-400" /> Password Requirements
+                    </p>
+                    <div className="space-y-2">
+                      <div className={`flex items-center gap-2 text-[11px] ${validations.minLength ? 'text-emerald-400' : 'text-slate-300'}`}>
+                        {validations.minLength ? <Check size={12}/> : <X size={12}/>} 8+ Characters
+                      </div>
+                      <div className={`flex items-center gap-2 text-[11px] ${validations.hasNumber ? 'text-emerald-400' : 'text-slate-300'}`}>
+                        {validations.hasNumber ? <Check size={12}/> : <X size={12}/>} Include a number
+                      </div>
+                      <div className={`flex items-center gap-2 text-[11px] ${validations.hasSpecial ? 'text-emerald-400' : 'text-slate-300'}`}>
+                        {validations.hasSpecial ? <Check size={12}/> : <X size={12}/>} Special character (!@#)
+                      </div>
+                    </div>
+                    <div className="absolute -bottom-1 left-4 w-2 h-2 bg-slate-800 rotate-45"></div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -69,7 +110,7 @@ const Auth = ({ onAuth }) => {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Register as:</label>
               <select 
-                className="w-full p-3 rounded-xl border border-slate-200 outline-none bg-white"
+                className="w-full p-3 rounded-xl border border-slate-200 outline-none bg-white font-medium text-sm"
                 onChange={(e) => setRole(e.target.value)}
               >
                 <option value="user">Student / User</option>
@@ -78,7 +119,14 @@ const Auth = ({ onAuth }) => {
             </div>
           )}
           
-          <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
+          <button 
+            type="submit" 
+            className={`w-full p-3 rounded-xl font-bold transition flex items-center justify-center gap-2 shadow-lg ${
+              isRegister && !isPasswordSecure 
+              ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' 
+              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
+            }`}
+          >
             {isRegister ? "Create Account" : "Sign In"} <ArrowRight size={18} />
           </button>
         </form>
@@ -86,7 +134,7 @@ const Auth = ({ onAuth }) => {
         <div className="mt-6 text-center">
           <button 
             onClick={() => setIsRegister(!isRegister)}
-            className="text-sm text-blue-600 font-medium hover:underline"
+            className="text-sm text-blue-600 font-bold hover:underline"
           >
             {isRegister ? "Already have an account? Log in" : "New here? Create an account"}
           </button>
